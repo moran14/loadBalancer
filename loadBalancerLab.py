@@ -37,7 +37,7 @@ class LbTopo( Topo ):
 
     def build( self, **_opts ):
 
-        defaultIP = '10.0.0.1/24'  # IP address for r0-eth1
+        defaultIP = '10.0.0.1/8'  # IP address for r0-eth1
         lb1 = self.addNode( 'lb1', cls=LB , ip=defaultIP )
 
         s1, s2 = [ self.addSwitch( s ) for s in 's1', 's2' ]
@@ -47,9 +47,9 @@ class LbTopo( Topo ):
         self.addLink( s2, lb1, intfName2='lb1-eth2',
                       params2={ 'ip' : '192.168.0.1/24' } )
 
-        h1 = self.addHost( 'h1', cls=Client, ip='10.0.0.101/24',
+        h1 = self.addHost( 'h1', cls=Client, ip='10.0.0.101/8',
                            defaultRoute='via 10.0.0.1' )
-        h2 = self.addHost( 'h2', cls=Client, ip='10.0.0.102/24',
+        h2 = self.addHost( 'h2', cls=Client, ip='10.0.0.102/8',
                            defaultRoute='via 172.16.0.1' )
         h3 = self.addHost( 'h3', cls=Client,ip='10.0.0.103/8',
                            defaultRoute='via 10.0.0.1' )
