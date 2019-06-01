@@ -1,9 +1,12 @@
 import socket, SocketServer, Queue, sys, time, threading
 HTTP_PORT = 80
-previous_server = 3
 lock = threading.Lock()
 SERV_HOST = '10.0.0.1'
 servers = {'serv1': ('192.168.0.101', None), 'serv2': ('192.168.0.102', None), 'serv3': ('192.168.0.103', None)}
+CLIENTS = {}
+servers_handle_times = {'serv1' : {'M':2, 'P':1, 'V':1, 'time':0},
+                        'serv2' : {'M':2, 'P':1, 'V':1, 'time':0},
+                        'serv3' : {'M':1, 'P':2, 'V':3, 'time':0}}
 
 def LBPrint(string):
     print '%s: %s-----' % (time.strftime('%H:%M:%S', time.localtime(time.time())), string)
@@ -35,8 +38,7 @@ def createSocket(addr, port):
     return new_sock
 
 
-def getServerSocket(servID):
-    name = 'serv%d' % servID
+def getServerSocket(server_name):
     return servers[name][1]
 
 
@@ -45,12 +47,46 @@ def getServerAddr(servID):
     return servers[name][0]
 
 
-def getNextServer():
+def update_servers_time(current_time):
+    servers_handle_times['serv1']['time'] = max(current_time, servers_handle_times['serv1']['time'])
+    servers_handle_times['serv2']['time'] = max(current_time, servers_handle_times['serv2']['time'])
+    servers_handle_times['serv3']['time'] = max(current_time, servers_handle_times['serv3']['time'])
+
+
+def getNextServer(client_address, req_type, req_len):
     global lock
-    global previous_server
     lock.acquire()
-    next_server = previous_server % 3 + 1
-    previous_server = next_server
+
+    if client_address in CLIENTS:
+        current_time = CLIENTS[client_address]
+    else: # First request of a client is in TIME=0
+        current_time = 0
+
+    update_servers_time(current_time)
+
+    servers_task_time = {}
+    servers_task_time['serv1'] = servers_handle_times['serv1'][req_type] * req_len
+    servers_task_time['serv2'] = servers_handle_times['serv2'][req_type] * req_len
+    servers_task_time['serv3'] = servers_handle_times['serv3'][req_type] * req_len
+
+    serv1_task_end_time = servers_task_time['serv1'] + servers_handle_times['serv1']['time']
+    serv2_task_end_time = servers_task_time['serv2'] + servers_handle_times['serv2']['time']
+    serv3_task_end_time = servers_task_time['serv3'] + servers_handle_times['serv3']['time']
+
+
+    if serv1_task_end_time < serv2_task_end_time:
+        if serv1_task_end_time < serv3_task_end_time:
+            next_server = 'serv1'
+        else:
+            next_server = 'serv3'
+    elif serv2_task_end_time < serv3_task_end_time:
+        next_server = 'serv2'
+    else:
+        next_server = 'serv3'
+
+    servers_handle_times[next_server]['time'] += servers_task_time[next_server]
+    CLIENTS[client_address] = servers_handle_times[next_server]['time']
+
     lock.release()
     return next_server
 
@@ -66,9 +102,9 @@ class LoadBalancerRequestHandler(SocketServer.BaseRequestHandler):
         client_sock = self.request
         req = client_sock.recv(2)
         req_type, req_time = parseRequest(req)
-        servID = getNextServer()
+        server_name = getNextServer(self.client_address, req_type, req_time)
         LBPrint('recieved request %s from %s, sending to %s' % (req, self.client_address[0], getServerAddr(servID)))
-        serv_sock = getServerSocket(servID)
+        serv_sock = getServerSocket(server_name)
         serv_sock.sendall(req)
         data = serv_sock.recv(2)
         client_sock.sendall(data)
