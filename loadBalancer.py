@@ -2,11 +2,10 @@ import socket, SocketServer, Queue, sys, time, threading
 HTTP_PORT = 80
 lock = threading.Lock()
 SERV_HOST = '10.0.0.1'
-servers = {'serv1': ('192.168.0.101', None), 'serv2': ('192.168.0.102', None), 'serv3': ('192.168.0.103', None)}
 CLIENTS = {}
-servers_handle_times = {'serv1' : {'M':2, 'P':1, 'V':1, 'time':0},
-                        'serv2' : {'M':2, 'P':1, 'V':1, 'time':0},
-                        'serv3' : {'M':1, 'P':2, 'V':3, 'time':0}}
+servers_handle_times = {'serv1' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.101', 'socket' : None},
+                        'serv2' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.102', 'socket' : None},
+                        'serv3' : {'M':1, 'P':2, 'V':3, 'time':0, 'address': '192.168.0.103', 'socket' : None}}
 
 def LBPrint(string):
     print '%s: %s-----' % (time.strftime('%H:%M:%S', time.localtime(time.time())), string)
@@ -38,13 +37,12 @@ def createSocket(addr, port):
     return new_sock
 
 
-def getServerSocket(server_name):
-    return servers[name][1]
+def getServerSocket(name):
+    return servers_handle_times[name]['socket']
 
 
-def getServerAddr(servID):
-    name = 'serv%d' % servID
-    return servers[name][0]
+def getServerAddr(name):
+    return servers_handle_times[name]['address']
 
 
 def update_servers_time(current_time):
@@ -103,7 +101,7 @@ class LoadBalancerRequestHandler(SocketServer.BaseRequestHandler):
         req = client_sock.recv(2)
         req_type, req_len = parseRequest(req)
         server_name = getNextServer(self.client_address, req_type, req_len)
-        LBPrint('recieved request %s from %s, sending to %s' % (req, self.client_address[0], getServerAddr(servID)))
+        LBPrint('recieved request %s from %s, sending to %s' % (req, self.client_address[0], getServerAddr(server_name)))
         serv_sock = getServerSocket(server_name)
         serv_sock.sendall(req)
         data = serv_sock.recv(2)
@@ -120,9 +118,8 @@ if __name__ == '__main__':
     try:
         LBPrint('LB Started')
         LBPrint('Connecting to servers')
-        for name, (addr, sock) in servers.iteritems():
-            servers[name] = (
-             addr, createSocket(addr, HTTP_PORT))
+        for server in servers_handle_times.iteritems():
+            servers_handle_times[1]['socket'] = createSocket(servers_handle_times[1]['address'], HTTP_PORT)
 
         server = ThreadedTCPServer((SERV_HOST, HTTP_PORT), LoadBalancerRequestHandler)
         server.serve_forever()
