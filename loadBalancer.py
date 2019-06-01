@@ -118,8 +118,8 @@ if __name__ == '__main__':
     try:
         LBPrint('LB Started')
         LBPrint('Connecting to servers')
-        for server in servers_handle_times.iteritems():
-            servers_handle_times[1]['socket'] = createSocket(servers_handle_times[1]['address'], HTTP_PORT)
+        for serv in servers_handle_times.iteritems():
+            serv[1]['socket'] = createSocket(serv[1]['address'], HTTP_PORT)
 
         server = ThreadedTCPServer((SERV_HOST, HTTP_PORT), LoadBalancerRequestHandler)
         server.serve_forever()
