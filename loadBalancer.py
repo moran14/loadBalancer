@@ -56,7 +56,7 @@ def update_servers_time(current_time):
 def getNextServer(client_address, req_type, req_len):
     global lock
     lock.acquire()
-
+    req_len = int(req_len)
     if client_address in CLIENTS:
         current_time = CLIENTS[client_address]
     else: # First request of a client is in TIME=0
@@ -101,8 +101,8 @@ class LoadBalancerRequestHandler(SocketServer.BaseRequestHandler):
     def handle(self):
         client_sock = self.request
         req = client_sock.recv(2)
-        req_type, req_time = parseRequest(req)
-        server_name = getNextServer(self.client_address, req_type, req_time)
+        req_type, req_len = parseRequest(req)
+        server_name = getNextServer(self.client_address, req_type, req_len)
         LBPrint('recieved request %s from %s, sending to %s' % (req, self.client_address[0], getServerAddr(servID)))
         serv_sock = getServerSocket(server_name)
         serv_sock.sendall(req)
