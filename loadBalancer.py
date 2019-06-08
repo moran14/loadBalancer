@@ -87,13 +87,13 @@ def connectToServer(server):
         should_close_socket = True
         server_address = (server[1]['address'], LISTENING_PORT)
         sock.connect(server_address)
+        server[1]['socket'] = sock
     except socket.error as err:
         LBLogger(err)
         LBLogger('Failed to open socket')
         if should_close_socket:
             sock.close()
         sys.exit(1)
-    server[1]['socket'] = sock
 
 def connectToAllServers():
     LBLogger('Connecting to servers')
