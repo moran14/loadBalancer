@@ -9,6 +9,12 @@ SERVERS = {'serv1' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.101',
            'serv3' : {'M':1, 'P':2, 'V':3, 'time':0, 'address': '192.168.0.103', 'socket' : None}}
 
 
+def LBLogger(msg):
+    print '{time}: {msg}-----\n'.format(
+        time=time.strftime('%H:%M:%S', time.localtime(time.time())),
+        msg = msg)
+
+
 class ClientThread(threading.Thread):
 
     def __init__(self, client_address, client_socket):
@@ -21,7 +27,7 @@ class ClientThread(threading.Thread):
         request_type = request[0]
         request_len = request[1]
         server_name = getBestServer(self.client_address, request_type, request_len)
-        LBPrint('recieved request {request} from {client_address}, sending to {server_address}'.format(
+        LBLogger('recieved request {request} from {client_address}, sending to {server_address}'.format(
                 request=request,
                 client_address=self.client_address[0],
                 server_address=SERVERS[server_name]['address']))
@@ -30,10 +36,6 @@ class ClientThread(threading.Thread):
         data = server_socket.recv(2)
         self.client_socket.sendall(data)
         self.client_socket.close()
-
-def LBPrint(string):
-    print '%s: %s-----' % (time.strftime('%H:%M:%S', time.localtime(time.time())), string)
-
 
 def update_servers_time(current_time):
     SERVERS['serv1']['time'] = max(current_time, SERVERS['serv1']['time'])
@@ -86,19 +88,17 @@ def connectToServer(server):
         server_address = (server[1]['address'], LISTENING_PORT)
         sock.connect(server_address)
     except socket.error as err:
-        LBPrint(err)
-        LBPrint('Failed to open socket')
+        LBLogger(err)
+        LBLogger('Failed to open socket')
         if should_close_socket:
             sock.close()
         sys.exit(1)
     server[1]['socket'] = sock
 
-
 def connectToAllServers():
-    LBPrint('Connecting to servers')
+    LBLogger('Connecting to servers')
     for server in SERVERS.iteritems():
         connectToServer(server)
-
 
 def startLBServer():
     should_close_socket = False
@@ -107,27 +107,28 @@ def startLBServer():
         should_close_socket = True
         lb_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         lb_server.bind((LB_SERVER_ADDRESS, LISTENING_PORT))
-        LBPrint("Server started")
-        LBPrint("Waiting for client request..")
+        LBLogger("Server started")
+        LBLogger("Waiting for client request..")
         while True:
             lb_server.listen(5)
             client_socket, client_address = lb_server.accept()
             client_request_thread = ClientThread(client_address, client_socket)
             client_request_thread.start()
     except socket.error as err:
-        LBPrint(err)
-        LBPrint('Failed to open socket')
+        LBLogger(err)
+        LBLogger('Failed to open socket')
         if should_close_socket:
             lb_server.close()
         sys.exit(1)
 
 def main():
-    LBPrint('LB Started2')
+    LBLogger('LB Started')
     try:
         connectToAllServers()
         startLBServer()
     except:
-        LBPrint(sys.exc_info()[0])
+        LBLogger('Got unexcepted error')
+        LBLogger(sys.exc_info()[0])
 
 if __name__ == '__main__':
     main()
