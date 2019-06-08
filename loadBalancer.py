@@ -10,7 +10,7 @@ SERVERS = {'serv1' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.101',
 
 
 def LBLogger(msg):
-    print '{time}: {msg}-----\n'.format(
+    print '{time}: {msg}-----'.format(
         time=time.strftime('%H:%M:%S', time.localtime(time.time())),
         msg = msg)
 
