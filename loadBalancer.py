@@ -1,54 +1,27 @@
 import socket, SocketServer, Queue, sys, time, threading
-HTTP_PORT = 80
+http_port = 80
 lock = threading.Lock()
 SERV_HOST = '10.0.0.1'
 CLIENTS = {}
-servers_handle_times = {'serv1' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.101', 'socket' : None},
-                        'serv2' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.102', 'socket' : None},
-                        'serv3' : {'M':1, 'P':2, 'V':3, 'time':0, 'address': '192.168.0.103', 'socket' : None}}
+servers = {'serv1' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.101', 'socket' : None},
+           'serv2' : {'M':2, 'P':1, 'V':1, 'time':0, 'address': '192.168.0.102', 'socket' : None},
+           'serv3' : {'M':1, 'P':2, 'V':3, 'time':0, 'address': '192.168.0.103', 'socket' : None}}
 
 def LBPrint(string):
     print '%s: %s-----' % (time.strftime('%H:%M:%S', time.localtime(time.time())), string)
 
-
-def createSocket(addr, port):
-    for res in socket.getaddrinfo(addr, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
-        af, socktype, proto, canonname, sa = res
-        try:
-            new_sock = socket.socket(af, socktype, proto)
-        except socket.error as msg:
-            LBPrint(msg)
-            new_sock = None
-            continue
-        else:
-            try:
-                new_sock.connect(sa)
-            except socket.error as msg:
-                LBPrint(msg)
-                new_sock.close()
-                new_sock = None
-                continue
-            else:
-                break
-
-    if new_sock is None:
-        LBPrint('could not open socket')
-        sys.exit(1)
-    return new_sock
-
-
 def getServerSocket(name):
-    return servers_handle_times[name]['socket']
+    return servers[name]['socket']
 
 
 def getServerAddr(name):
-    return servers_handle_times[name]['address']
+    return servers[name]['address']
 
 
 def update_servers_time(current_time):
-    servers_handle_times['serv1']['time'] = max(current_time, servers_handle_times['serv1']['time'])
-    servers_handle_times['serv2']['time'] = max(current_time, servers_handle_times['serv2']['time'])
-    servers_handle_times['serv3']['time'] = max(current_time, servers_handle_times['serv3']['time'])
+    servers['serv1']['time'] = max(current_time, servers['serv1']['time'])
+    servers['serv2']['time'] = max(current_time, servers['serv2']['time'])
+    servers['serv3']['time'] = max(current_time, servers['serv3']['time'])
 
 
 def getNextServer(client_address, req_type, req_len):
@@ -63,13 +36,13 @@ def getNextServer(client_address, req_type, req_len):
     update_servers_time(current_time)
 
     servers_task_time = {}
-    servers_task_time['serv1'] = servers_handle_times['serv1'][req_type] * req_len
-    servers_task_time['serv2'] = servers_handle_times['serv2'][req_type] * req_len
-    servers_task_time['serv3'] = servers_handle_times['serv3'][req_type] * req_len
+    servers_task_time['serv1'] = servers['serv1'][req_type] * req_len
+    servers_task_time['serv2'] = servers['serv2'][req_type] * req_len
+    servers_task_time['serv3'] = servers['serv3'][req_type] * req_len
 
-    serv1_task_end_time = servers_task_time['serv1'] + servers_handle_times['serv1']['time']
-    serv2_task_end_time = servers_task_time['serv2'] + servers_handle_times['serv2']['time']
-    serv3_task_end_time = servers_task_time['serv3'] + servers_handle_times['serv3']['time']
+    serv1_task_end_time = servers_task_time['serv1'] + servers['serv1']['time']
+    serv2_task_end_time = servers_task_time['serv2'] + servers['serv2']['time']
+    serv3_task_end_time = servers_task_time['serv3'] + servers['serv3']['time']
 
 
     if serv1_task_end_time < serv2_task_end_time:
@@ -82,8 +55,8 @@ def getNextServer(client_address, req_type, req_len):
     else:
         next_server = 'serv3'
 
-    servers_handle_times[next_server]['time'] += servers_task_time[next_server]
-    CLIENTS[client_address] = servers_handle_times[next_server]['time']
+    servers[next_server]['time'] += servers_task_time[next_server]
+    CLIENTS[client_address] = servers[next_server]['time']
 
     lock.release()
     return next_server
@@ -113,15 +86,36 @@ class ThreadedTCPServer(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
     pass
 
 
-if __name__ == '__main__':
-    print "Moran"
+def connectToServer(server):
+    should_close_socket = False
     try:
-        LBPrint('LB Started')
-        LBPrint('Connecting to servers')
-        for serv in servers_handle_times.iteritems():
-            serv[1]['socket'] = createSocket(serv[1]['address'], HTTP_PORT)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        should_close_socket = True
+        server_address = (server[1]['address'], http_port)
+        sock.connect(server_address)
+    except socket.error as err:
+        LBPrint(err)
+        LBPrint('Failed to open socket')
+        if should_close_socket:
+            sock.close()
+        sys.exit(1)
+    server[1]['socket'] = sock
 
-        server = ThreadedTCPServer((SERV_HOST, HTTP_PORT), LoadBalancerRequestHandler)
+
+def connectToAllServers():
+    LBPrint('Connecting to servers')
+    for server in servers.iteritems():
+        connectToServer(server)
+
+
+def main():
+    LBPrint('LB Started')
+    try:
+        connectToAllServers()
+        server = ThreadedTCPServer((SERV_HOST, http_port), LoadBalancerRequestHandler)
         server.serve_forever()
     except socket.error as msg:
         LBPrint(msg)
+
+if __name__ == '__main__':
+    main()
